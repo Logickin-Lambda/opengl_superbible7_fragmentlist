@@ -4,6 +4,7 @@ const std = @import("std");
 const app = @import("sb7.zig");
 const ktx = @import("sb7ktx.zig");
 const shader = @import("sb7shader.zig");
+const model = @import("sb7object.zig");
 const shader_code = @import("shaders_triangle.zig");
 
 var program: app.gl.uint = undefined;
