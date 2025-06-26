@@ -103,7 +103,78 @@ pub const ChunkComment = struct {
     comment: [1]gl.char,
 };
 
-// The following object is a disaster...
+// The following object class is a disaster...
+// In the orignal C++ code,
 // Both the header and cpp contains
-// some implementation and now,
+// some implementations and now,
 // I need to merge both of them...
+//
+// Since the original C++ code is an object
+// I could try to build a function return a struct
+// I will call it ModelObject instead of Object
+// because it seemingly a class for fetching a 3D model
+// such that to remove the confusion of objects in OOP.
+
+/// Just Why??? Why did the original C++ implementation
+/// did a single item enum for this Constant, on
+/// the member level???
+const MAX_SUB_OBJECTS = 256;
+
+pub fn ModelObject() type {
+    return struct {
+        const Self = @This();
+
+        // These were the private properties
+        data_buffer: gl.uint,
+        vao: gl.uint,
+        index_type: gl.uint,
+        index_offset: gl.uint,
+        num_sub_objects: gl.uint,
+        sub_object: [MAX_SUB_OBJECTS]SubObjectDecl,
+
+        // Of course, some part of the process needs dynamic
+        // heap allocation, especially reading a file, thus an allocator
+        allocator: std.mem.Allocator,
+
+        pub fn init(allocator: std.mem.Allocator) Self {
+            return Self{
+                .allocator = allocator,
+                .data_buffer = 0,
+                .index_type = 0,
+                .vao = 0,
+            };
+        }
+
+        pub fn deinit() void {}
+
+        pub fn render(_: Self, instance_count_in: ?gl.uint, base_instance_in: ?gl.uint) void {
+            renderSubObject(0, instance_count_in, base_instance_in);
+        }
+
+        pub fn renderSubObject(self: Self, object_index: gl.uint, instance_count_in: ?gl.uint, base_instance_in: ?gl.uint) void {
+            const instance_count = instance_count_in orelse 1;
+            const base_instance = base_instance_in orelse 0;
+
+            gl.BindVertexArray(self.vao);
+
+            if (self.index_type != gl.NONE) {
+                gl.DrawElementsInstancedBaseInstance(
+                    gl.TRIANGLES,
+                    self.sub_object[object_index].count,
+                    self.index_type,
+                    @ptrCast(&self.sub_object[object_index].first),
+                    instance_count,
+                    base_instance,
+                );
+            } else {
+                gl.DrawArraysInstancedBaseInstance(
+                    gl.TRIANGLES,
+                    self.sub_object[object_index].first,
+                    self.sub_object[object_index].count,
+                    instance_count,
+                    base_instance,
+                );
+            }
+        }
+    };
+}
