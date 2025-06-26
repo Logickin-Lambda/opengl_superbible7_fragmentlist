@@ -176,5 +176,77 @@ pub fn ModelObject() type {
                 );
             }
         }
+
+        pub fn get_sub_object_info(self: Self, index: gl.uint, first: *gl.uint, count: *gl.uint) void {
+            if (index >= MAX_SUB_OBJECTS) {
+                // In the original C++ implementation,
+                // set the reference to... 0?
+                // I believe it should be overwriting the
+                // value given by the reference instead of
+                // changing it.
+                first.* = 0;
+                count.* = 0;
+            } else {
+                first.* = self.sub_object[index].first;
+                count.* = self.sub_object[index].count;
+            }
+        }
+
+        /// Here we go, we now need to fight against the Demon "Icon of Sin",
+        /// The final boss of this framework (hopefully)
+        ///
+        /// Errors shows on VScode;
+        /// Where no comments shown and where hell's six feet deep;
+        /// That crash does wait, there's no debate;
+        /// So rewrite the mess, going to hell and back!
+        ///
+        pub fn load(self: Self, filename: []u8) !gl.uint {
+
+            // we have to try to open the file before erase the vao and vbo.
+            var file = try std.fs.cwd().openFile(filename, .{});
+            defer file.close();
+            const bf = std.io.bufferedReader(file.reader());
+            const fp = bf.reader();
+
+            // Another rant to the original C++ code:
+            // The free memory process had only processed once throughout the whole class.
+            // Why specifically refactor this four line code while leaving all other
+            // messier spaghetti in place?!
+            gl.DeleteVertexArrays(1, (&self.vao)[0..1]);
+            gl.DeleteBuffers(1, (&self.data_buffer)[0..1]);
+            self.vao = 0;
+            self.data_buffer = 0;
+
+            // Again, I am going to declare a local allocator to read the file if needed
+            // instead of jumping the daunting raw pointer here and there.
+            // This might not be used, and if that is the case, I will remove it.
+            var arena_file = std.heap.ArenaAllocator.init(self.allocator);
+            defer arena_file.deinit();
+
+            // From here, the original C++ code just slap the data into the header struct,
+            // and hoping for the best to map the correct field of the structs...
+            // I don't know if zig can do this, nor I want to do this because
+            // this looks concerning security wise and it is really hard to understand.
+            // Thus, I will reverse engineering the file to see how to read it such that
+            // the it can read in a correct order using the reader operations.
+
+            // Firstly, we need to read the first few bytes of data into a header:
+            // The format of the header is the following:
+            // magic        : 4 slot char array, aka an uint
+            // size         : uint, represent the size of this header
+            // num_chunks   : uint
+            // flags        : uint
+            //
+            // Suggested by the byte 4 of the file, corresponding to the size field,
+            // seems like all the size, or any integer based field in the header are
+            // big endian for some reason, while the name of the chunk are the usual
+            // little endian... Not sure why they have made such a design choice...
+            // Thankfully, zig have the endianness parameter which is a savior in
+            // this use case, making fetching the correct size information intuitive.
+            // and luckily, I don't just slap a struct using anyopaque or the sizing
+            // will be completely wrong; thus, the implementation is the following:
+
+            // TODO: TMR: Read the SB6M_HEADER and put into a struct
+        }
     };
 }
