@@ -4,7 +4,7 @@ const std = @import("std");
 const app = @import("sb7.zig");
 const ktx = @import("sb7ktx.zig");
 const shader = @import("sb7shader.zig");
-const glsl = @import("shaders_triangle.zig");
+const shader_code = @import("shaders_triangle.zig");
 
 var program: app.gl.uint = undefined;
 var vao: app.gl.uint = undefined;
@@ -24,43 +24,32 @@ pub fn main() !void {
 }
 
 fn startup() callconv(.c) void {
+    const page = std.heap.page_allocator;
+    var arena = std.heap.ArenaAllocator.init(page);
+    defer arena.deinit();
 
-    // vertex shader
-    const vs: app.gl.uint = app.gl.CreateShader(app.gl.VERTEX_SHADER);
-    app.gl.ShaderSource(
-        vs,
-        1,
-        &.{glsl.vertexShaderImpl},
-        &.{glsl.vertexShaderImpl.len},
-    );
-    app.gl.CompileShader(vs);
-    var success: c_int = undefined;
-    var infoLog: [512:0]u8 = undefined;
-    app.verifyShader(vs, &success, &infoLog) catch {
+    const vs = shader.load_from_file(arena.allocator(), "src/shader_vertex.glsl", app.gl.VERTEX_SHADER, true) catch {
         return;
     };
 
-    // fragment shader
-    const fs: app.gl.uint = app.gl.CreateShader(app.gl.FRAGMENT_SHADER);
-    app.gl.ShaderSource(
-        fs,
-        1,
-        &.{glsl.fragmentShaderImpl},
-        &.{glsl.fragmentShaderImpl.len},
-    );
-    app.gl.CompileShader(fs);
-    app.verifyShader(fs, &success, &infoLog) catch {
+    const fs = shader.load_from_file(arena.allocator(), "src/shader_fragment.glsl", app.gl.FRAGMENT_SHADER, true) catch {
+        return;
+    };
+
+    const shaders = [2]c_uint{ vs, fs };
+    program = shader.linkFromShaders(&shaders, true, true) catch {
+        std.debug.print("FAILED TO LINK PROGRAM", .{});
         return;
     };
 
     // Now put all the shaders into the program
-    program = app.gl.CreateProgram();
-    app.gl.AttachShader(program, vs);
-    app.gl.AttachShader(program, fs);
+    // program = app.gl.CreateProgram();
+    // app.gl.AttachShader(program, vs);
+    // app.gl.AttachShader(program, fs);
 
-    app.gl.LinkProgram(program);
+    // app.gl.LinkProgram(program);
+
     app.gl.GenVertexArrays(1, (&vao)[0..1]);
-
     app.gl.BindVertexArray(vao);
 }
 

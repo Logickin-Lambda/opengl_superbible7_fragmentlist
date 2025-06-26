@@ -9,7 +9,7 @@ const gl = @import("gl");
 /// Based on my understanding, the is similar to our shader loading code
 /// in the previous examples, but they have been extracted into a function,
 /// with optional error checking.
-pub fn load(allocator: std.mem.Allocator, filepath: []const u8, shader_type: gl.@"enum", check_errors: bool) !gl.uint {
+pub fn load_from_file(allocator: std.mem.Allocator, filepath: []const u8, shader_type: gl.@"enum", check_errors: bool) !gl.uint {
     var file = try std.fs.cwd().openFile(filepath, .{});
     defer file.close();
 
@@ -37,7 +37,7 @@ pub fn load(allocator: std.mem.Allocator, filepath: []const u8, shader_type: gl.
 
     // Creating a shader, just like how you have done in the previous examples:
     const shader = gl.CreateShader(shader_type);
-    gl.ShaderSource(shader, 1, &.{data.ptr}, &.{data.len});
+    gl.ShaderSource(shader, 1, &.{data.ptr}, &.{@as(c_int, @intCast(data.len))});
     gl.CompileShader(shader);
 
     if (check_errors) {
@@ -46,6 +46,19 @@ pub fn load(allocator: std.mem.Allocator, filepath: []const u8, shader_type: gl.
         try verifyShader(shader);
     }
 
+    return shader;
+}
+
+// the is the og shader loading code used in the earlier examples
+pub fn load_from_slice(source: []const u8, shader_type: gl.@"enum", check_errors: bool) !gl.uint {
+    const shader = gl.CreateShader(shader_type);
+    gl.ShaderSource(shader, 1, &.{source.ptr}, &.{@as(c_int, @intCast(source.len))});
+    gl.CompileShader(shader);
+
+    if (check_errors) {
+        errdefer gl.DeleteShader(shader);
+        try verifyShader(shader);
+    }
     return shader;
 }
 
@@ -58,18 +71,23 @@ pub fn load(allocator: std.mem.Allocator, filepath: []const u8, shader_type: gl.
 /// Nevertheless, thanks to the slices in zig, we don't need to specify
 /// length of the given array which slices has length provided, so
 /// I have removed the original shader_count input parameter.
-pub fn linkFromShaders(shaders: []const gl.uint, delete_shaders: bool, check_errors: bool) gl.uint {
+pub fn linkFromShaders(shaders: []const gl.uint, delete_shaders: bool, check_errors: bool) !gl.uint {
     const program = gl.CreateProgram();
 
     for (shaders) |shader| {
         gl.AttachShader(program, shader);
     }
 
+    gl.LinkProgram(program);
+
     if (check_errors) {
         errdefer gl.DeleteProgram(program);
         try verifyProgram(program);
     }
 
+    // According to https://stackoverflow.com/a/18736860/20840262,
+    // The deleted a linked shader don't actually delete the shader,
+    // but marked as to be deleted after the shader is no longer linked.
     if (delete_shaders) {
         for (shaders) |shader| {
             gl.DeleteShader(shader);
@@ -83,13 +101,16 @@ pub fn linkFromShaders(shaders: []const gl.uint, delete_shaders: bool, check_err
 /// so that I don't need to handle the file IOs like the original C++ version,
 /// while it is still compatible to my original version.
 /// Running the executables display the error message anyways.
-pub fn verifyShader(shader: c_uint) !void {
-    var success: gl.uint = gl.TRUE;
-    var info_log: [4096:0]u8 = undefined;
+///
+/// Unfortunately, this part will be duplicated, but I have no choice if I need to
+/// make this compatible with the earlier examples since this file is optional.
+fn verifyShader(shader: c_uint) !void {
+    var success: gl.int = gl.TRUE;
+    var info_log: [1024:0]u8 = undefined;
 
     gl.GetShaderiv(shader, gl.COMPILE_STATUS, &success);
 
-    if (success.* == gl.FALSE) {
+    if (success == gl.FALSE) {
         gl.GetShaderInfoLog(
             shader,
             @as(c_int, @intCast(info_log.len)),
@@ -101,12 +122,12 @@ pub fn verifyShader(shader: c_uint) !void {
     }
 }
 
-pub fn verifyProgram(shaderProgram: c_uint) !void {
-    var success: gl.uint = gl.TRUE;
-    var info_log: [4096:0]u8 = undefined;
+fn verifyProgram(shaderProgram: c_uint) !void {
+    var success: gl.int = gl.TRUE;
+    var info_log: [1024:0]u8 = undefined;
     gl.GetProgramiv(shaderProgram, gl.LINK_STATUS, &success);
 
-    if (success.* == gl.FALSE) {
+    if (success == gl.FALSE) {
         gl.GetProgramInfoLog(
             shaderProgram,
             @as(c_int, @intCast(info_log.len)),
