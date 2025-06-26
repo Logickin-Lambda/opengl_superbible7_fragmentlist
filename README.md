@@ -9,6 +9,8 @@ If you are not focusing on the shader and the gl part of the library, you **SHOU
 - https://github.com/castholm/zig-examples/tree/master/opengl-hexagon
 - https://github.com/griush/zig-opengl-example/blob/master/src/main.zig
 
+PS: In this fragment list example, I no longer think I am learning OpenGL, but fighting Demons in the framework hell just like the DOOM game. The original C++ SuperBible framework is the second worst code I have ever seen, filling full of gotos, magic numbers, top level variables and a single object implementation flying across different files...
+
 # OpenGL SuperBible 7th Edition Triangle Example
 This is a basic example to show how the gl library plot a triangle and apply color with a series of shader, 
 and the compilation process.
