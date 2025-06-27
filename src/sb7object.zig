@@ -70,13 +70,15 @@ pub const VertexAttribDecl = extern struct {
     data_offset: gl.uint,
 };
 
-const VERTEX_ATTRIB_FLAG_NORMALIZED = 0x00000001;
-const VERTEX_ATTRIB_FLAG_INTEGER = 0x00000002;
+const VERTEX_ATTRIB_FLAG_NORMALIZED: gl.uint = 0x00000001;
+const VERTEX_ATTRIB_FLAG_INTEGER: gl.uint = 0x00000002;
 
 pub const VertexAttribChunk = extern struct {
     header: ChunkHeader,
     attrib_count: gl.uint,
-    attrib_data: [1]VertexAttribDecl, // Single Sized Array, but it has a count?
+    // It is not even a single item array to begin with
+    // because the code iterates this property using in an index
+    attrib_data: [*]VertexAttribDecl,
 };
 
 pub const DataEncoding = enum(gl.uint) {
@@ -99,12 +101,12 @@ pub const SubObjectDecl = extern struct {
 pub const ChunkSubObjectList = extern struct {
     header: ChunkHeader,
     count: gl.uint,
-    sub_object: [1]SubObjectDecl,
+    sub_object: [*]SubObjectDecl,
 };
 
 pub const ChunkComment = extern struct {
     header: ChunkHeader,
-    comment: [1]gl.char,
+    comment: [*]gl.char,
 };
 
 // The following object class is a disaster...
@@ -141,12 +143,14 @@ pub fn ModelObject() type {
         allocator: std.mem.Allocator,
 
         pub fn init(allocator: std.mem.Allocator) Self {
-            return Self{
+            const model_object = Self{
                 .allocator = allocator,
                 .data_buffer = 0,
                 .index_type = 0,
                 .vao = 0,
             };
+
+            return model_object;
         }
 
         pub fn deinit() void {}
@@ -204,7 +208,7 @@ pub fn ModelObject() type {
         /// That crash does wait, there's no debate;
         /// So rewrite the mess, going to hell and back!
         ///
-        pub fn load(self: *Self, filename: []const u8) !gl.uint {
+        pub fn load(self: *Self, filename: []const u8) !void {
 
             // we have to try to open the file before erase the vao and vbo.
             var file = try std.fs.cwd().openFile(filename, .{});
@@ -353,7 +357,52 @@ pub fn ModelObject() type {
                 }
             }
 
-            return 0;
+            // Seems like the original program has stated that the vertex_attrib_chunk is not optional
+            // because there is no null check in this part, but to prevent the program crashes with
+            // a null pointer, I will perform a null check before processing the loop.
+            if (vertex_attrib_chunk) |vertex_attrib| {
+                for (0..vertex_attrib.attrib_count) |i| {
+                    const attrib_decl = vertex_attrib.attrib_data[i];
+                    const flag_normalized: gl.boolean = if (attrib_decl.flags & VERTEX_ATTRIB_FLAG_NORMALIZED != 0) gl.TRUE else gl.FALSE;
+                    gl.VertexAttribPointer(
+                        @intCast(i),
+                        @intCast(attrib_decl.size),
+                        attrib_decl.attr_type,
+                        flag_normalized,
+                        @intCast(attrib_decl.stride),
+                        attrib_decl.data_offset,
+                    );
+                }
+            }
+
+            if (index_data_chunk) |index_data| {
+                gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.data_buffer);
+                self.index_type = index_data.index_type;
+                self.index_offset = index_data.index_data_offset;
+            } else {
+                self.index_type = gl.NONE;
+            }
+
+            if (sub_object_chunk) |sub_object| {
+                if (sub_object.count > MAX_SUB_OBJECTS) {
+                    sub_object.count = MAX_SUB_OBJECTS;
+                }
+
+                for (0..sub_object.count) |i| {
+                    self.sub_object[i] = sub_object.sub_object[i];
+                }
+
+                self.num_sub_objects = sub_object.count;
+            } else {
+                const index = if (self.index_type != gl.NONE) index_data_chunk.?.index_count else vertex_data_chunk.?.total_vertices;
+
+                self.sub_object[0].first = 0;
+                self.sub_object[0].count = index;
+            }
+
+            // Not sure why they bind the array and buffer in here again
+            gl.BindVertexArray(0);
+            gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
         }
     };
 }

@@ -54,7 +54,7 @@ fn startup() callconv(.c) void {
     app.gl.BindVertexArray(vao);
 
     var model_instance = model.ModelObject().init(arena.allocator());
-    _ = model_instance.load("src/dragon.sbm") catch {
+    model_instance.load("src/dragon.sbm") catch {
         // std.debug.print("ERROR ON LOADING MODEL", .{});
         return;
     };
