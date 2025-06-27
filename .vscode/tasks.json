@@ -1,0 +1,8 @@
+{
+    "version": "1.0.0",
+    "tasks": [{
+        "label": "learn_opengl",
+        "type": "shell",
+        "command": "zig build" 
+    }]
+}

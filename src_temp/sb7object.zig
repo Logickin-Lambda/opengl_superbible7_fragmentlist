@@ -1,5 +1,5 @@
 /// Welcome to another abstraction hell!
-/// This is the worst offender so far in the framework because it is
+/// This is worst offender so far in the framework because it is
 /// not an object by the OOP standard, but it is a program for loading a
 /// 3D model into OpenGL, and the program spans across sb7object.cpp
 /// and its object.h, along with some crazy sb6file headers.
@@ -77,9 +77,7 @@ pub const VertexAttribChunk = extern struct {
     header: ChunkHeader,
     attrib_count: gl.uint,
     // It is not even a single item array to begin with
-    // because the code iterates this property using in an index,
-    // I don't know why they squarely put a single item array to begin with.
-    // In this zig version, I use Many-Item Pointer instead.
+    // because the code iterates this property using in an index
     attrib_data: [*]VertexAttribDecl,
 };
 
@@ -155,7 +153,7 @@ pub fn ModelObject() type {
             return model_object;
         }
 
-        pub fn deinit(_: Self) void {}
+        pub fn deinit() void {}
 
         pub fn render(_: Self, instance_count_in: ?gl.uint, base_instance_in: ?gl.uint) void {
             renderSubObject(0, instance_count_in, base_instance_in);

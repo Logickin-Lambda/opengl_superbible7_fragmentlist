@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const exe = b.addExecutable(.{
-        .name = "learn_opengl_index_cubes",
+        .name = "learn_opengl_fragmentlist",
         .root_module = exe_mod,
     });
 
