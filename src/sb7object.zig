@@ -12,17 +12,19 @@ const gl = @import("gl");
 
 /// Here are all the type definition and structs,
 /// Starting with packing a four digit char into a big endian number.
+/// The reason is that when the data is feed into the struct, it
+/// seems to read that in a big endian manner.
 fn SB6M_FOURCC(a: gl.uint, b: gl.uint, c: gl.uint, d: gl.uint) gl.uint {
     return a | b << 8 | c << 16 | d << 24;
 }
 
 pub const ChunkType = enum(gl.uint) {
-    SB6M_CHUNK_TYPE_INDEX_DATA = SB6M_FOURCC('I', 'N', 'D', 'X'),
-    SB6M_CHUNK_TYPE_VERTEX_DATA = SB6M_FOURCC('V', 'R', 'T', 'X'),
-    SB6M_CHUNK_TYPE_VERTEX_ATTRIBS = SB6M_FOURCC('A', 'T', 'R', 'B'),
-    SB6M_CHUNK_TYPE_SUB_OBJECT_LIST = SB6M_FOURCC('O', 'L', 'S', 'T'),
-    SB6M_CHUNK_TYPE_COMMENT = SB6M_FOURCC('C', 'M', 'N', 'T'),
-    SB6M_CHUNK_TYPE_DATA = SB6M_FOURCC('D', 'A', 'T', 'A'),
+    INDEX_DATA = SB6M_FOURCC('I', 'N', 'D', 'X'),
+    VERTEX_DATA = SB6M_FOURCC('V', 'R', 'T', 'X'),
+    VERTEX_ATTRIBS = SB6M_FOURCC('A', 'T', 'R', 'B'),
+    SUB_OBJECT_LIST = SB6M_FOURCC('O', 'L', 'S', 'T'),
+    COMMENT = SB6M_FOURCC('C', 'M', 'N', 'T'),
+    DATA = SB6M_FOURCC('D', 'A', 'T', 'A'),
 };
 
 /// The union will be replaced by a single int,
@@ -31,33 +33,35 @@ pub const ChunkType = enum(gl.uint) {
 /// std.mem.bytesToValue() instead because
 /// these are used for opening files and
 /// I don't think they are time critical anyways.
-pub const Header = struct {
+/// Also, to support their original file format,
+/// we need to convert all struct into extern struct.
+pub const Header = extern struct {
     magic: gl.uint,
     size: gl.uint,
     num_chunks: gl.uint,
     flags: gl.uint,
 };
 
-pub const ChunkHeader = struct {
+pub const ChunkHeader = extern struct {
     chunk_type: gl.uint,
     size: gl.uint,
 };
 
-pub const ChunkIndexData = struct {
+pub const ChunkIndexData = extern struct {
     header: ChunkHeader,
     index_type: gl.uint,
     index_count: gl.uint,
     index_data_offset: gl.uint,
 };
 
-pub const ChunkVertexData = struct {
+pub const ChunkVertexData = extern struct {
     header: ChunkHeader,
     data_size: gl.uint,
     data_offset: gl.uint,
     total_vertices: gl.uint,
 };
 
-pub const VertexAttribDecl = struct {
+pub const VertexAttribDecl = extern struct {
     name: [64]u8,
     size: gl.uint,
     attr_type: gl.uint,
@@ -69,7 +73,7 @@ pub const VertexAttribDecl = struct {
 const VERTEX_ATTRIB_FLAG_NORMALIZED = 0x00000001;
 const VERTEX_ATTRIB_FLAG_INTEGER = 0x00000002;
 
-pub const VertexAttribChunk = struct {
+pub const VertexAttribChunk = extern struct {
     header: ChunkHeader,
     attrib_count: gl.uint,
     attrib_data: [1]VertexAttribDecl, // Single Sized Array, but it has a count?
@@ -80,25 +84,25 @@ pub const DataEncoding = enum(gl.uint) {
     DATA_ENCODING_RAW = 0,
 };
 
-pub const DataChunk = struct {
+pub const DataChunk = extern struct {
     header: ChunkHeader,
     encoding: gl.uint,
     data_offset: gl.uint,
     data_length: gl.uint,
 };
 
-pub const SubObjectDecl = struct {
+pub const SubObjectDecl = extern struct {
     first: gl.uint,
     count: gl.uint,
 };
 
-pub const ChunkSubObjectList = struct {
+pub const ChunkSubObjectList = extern struct {
     header: ChunkHeader,
     count: gl.uint,
     sub_object: [1]SubObjectDecl,
 };
 
-pub const ChunkComment = struct {
+pub const ChunkComment = extern struct {
     header: ChunkHeader,
     comment: [1]gl.char,
 };
@@ -128,9 +132,9 @@ pub fn ModelObject() type {
         data_buffer: gl.uint,
         vao: gl.uint,
         index_type: gl.uint,
-        index_offset: gl.uint,
-        num_sub_objects: gl.uint,
-        sub_object: [MAX_SUB_OBJECTS]SubObjectDecl,
+        index_offset: gl.uint = undefined,
+        num_sub_objects: gl.uint = undefined,
+        sub_object: [MAX_SUB_OBJECTS]SubObjectDecl = undefined,
 
         // Of course, some part of the process needs dynamic
         // heap allocation, especially reading a file, thus an allocator
@@ -200,12 +204,13 @@ pub fn ModelObject() type {
         /// That crash does wait, there's no debate;
         /// So rewrite the mess, going to hell and back!
         ///
-        pub fn load(self: Self, filename: []u8) !gl.uint {
+        pub fn load(self: *Self, filename: []const u8) !gl.uint {
 
             // we have to try to open the file before erase the vao and vbo.
             var file = try std.fs.cwd().openFile(filename, .{});
             defer file.close();
-            const bf = std.io.bufferedReader(file.reader());
+
+            var bf = std.io.bufferedReader(file.reader());
             const fp = bf.reader();
 
             // Another rant to the original C++ code:
@@ -217,18 +222,12 @@ pub fn ModelObject() type {
             self.vao = 0;
             self.data_buffer = 0;
 
-            // Again, I am going to declare a local allocator to read the file if needed
-            // instead of jumping the daunting raw pointer here and there.
-            // This might not be used, and if that is the case, I will remove it.
-            var arena_file = std.heap.ArenaAllocator.init(self.allocator);
-            defer arena_file.deinit();
-
             // From here, the original C++ code just slap the data into the header struct,
             // and hoping for the best to map the correct field of the structs...
             // I don't know if zig can do this, nor I want to do this because
             // this looks concerning security wise and it is really hard to understand.
             // Thus, I will reverse engineering the file to see how to read it such that
-            // the it can read in a correct order using the reader operations.
+            // it can read in a correct order using the reader operations.
 
             // Firstly, we need to read the first few bytes of data into a header:
             // The format of the header is the following:
@@ -239,14 +238,73 @@ pub fn ModelObject() type {
             //
             // Suggested by the byte 4 of the file, corresponding to the size field,
             // seems like all the size, or any integer based field in the header are
-            // big endian for some reason, while the name of the chunk are the usual
-            // little endian... Not sure why they have made such a design choice...
-            // Thankfully, zig have the endianness parameter which is a savior in
-            // this use case, making fetching the correct size information intuitive.
-            // and luckily, I don't just slap a struct using anyopaque or the sizing
-            // will be completely wrong; thus, the implementation is the following:
+            // little endian.
 
-            // TODO: TMR: Read the SB6M_HEADER and put into a struct
+            // Unfortunately, we need to do the same with zig because the OpenGL functions
+            // want us to pass the pointer of the chunk; although the features in file io are
+            // great and it is really handy for most of the task, it doesn't seems to work with
+            // the file format I am working with where it is heavily relies on raw pointer
+            // access. Thus, we have to bite the bullet and...
+            // Allocate the whole file into heap such that we can refer the file using pointers.
+
+            var arena_file = std.heap.ArenaAllocator.init(self.allocator);
+            defer arena_file.deinit();
+            const file_data = try fp.readAllAlloc(arena_file.allocator(), try file.getEndPos());
+            var file_data_ptr = file_data.ptr;
+
+            // We need to gaslit the file_data to be a pointer to the Header struct.
+            // thus, alignCast and ptrCast to the rescue.
+            const header_ptr: *Header = @ptrCast(@alignCast(file_data_ptr));
+            file_data_ptr += header_ptr.size; // Jumps to the next Header chunks
+
+            // Seems the casting handles the endianness as well, so we get 16 instead of 268,435,456
+            // std.debug.print("\nHeader Result\n", .{});
+            // std.debug.print("Magic: {X}\n", .{header_ptr.magic}); // prints 4D364253 (M6bS)
+            // std.debug.print("Size: {X}\n", .{header_ptr.size}); // prints 16
+            // std.debug.print("Num Chunks: {X}\n", .{header_ptr.num_chunks}); // prints 2
+            // std.debug.print("Flags: {X}\n", .{header_ptr.flags}); // prints 0
+
+            // Here is the confusing bit Because we need to iterate file by the chunk size given
+            // by the header, and precisely assign the pointer of each starting point of the chunks.
+            // Since all headers are merged into a single file, we need some form of identifier to
+            // tell the type of chunk, and this is where the Clamped four characters uint shines
+            // because we can turn that into an integer based pattern matching as shown:
+            var vertex_attrib_chunk: ?*VertexAttribChunk = null;
+            var vertex_data_chunk: ?*ChunkVertexData = null;
+            var index_data_chunk: ?*ChunkIndexData = null;
+            var sub_object_chunk: ?*ChunkSubObjectList = null;
+            var data_chunk: ?*DataChunk = null;
+
+            for (0..header_ptr.*.num_chunks) |_| {
+                // More Gaslighting to the file_data to different form of header and chunks.
+                const chunk: *ChunkHeader = @ptrCast(@alignCast(file_data_ptr));
+                file_data_ptr += chunk.size;
+
+                // Seems it is possible to solve it using union, but let's follow the original C++ way
+                switch (@as(ChunkType, @enumFromInt(chunk.chunk_type))) {
+                    ChunkType.VERTEX_ATTRIBS => {
+                        vertex_attrib_chunk = @ptrCast(@alignCast(chunk));
+                    },
+                    ChunkType.VERTEX_DATA => {
+                        vertex_data_chunk = @ptrCast(@alignCast(chunk));
+                    },
+                    ChunkType.INDEX_DATA => {
+                        index_data_chunk = @ptrCast(@alignCast(chunk));
+                    },
+                    ChunkType.SUB_OBJECT_LIST => {
+                        sub_object_chunk = @ptrCast(@alignCast(chunk));
+                    },
+                    ChunkType.DATA => {
+                        data_chunk = @ptrCast(@alignCast(chunk));
+                    },
+                    else => {},
+                }
+            }
+
+            // Finally, with all those data, we can finally work on something familiar,
+            // to declare a new array and buffer for our incoming objects
+
+            return 0;
         }
     };
 }
