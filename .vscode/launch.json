@@ -5,12 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "learn_opengl",
+            "name": "learn_opengl_fragmentlist",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "./zig-out/bin/learn_opengl",
+            "program": "./zig-out/bin/learn_opengl_fragmentlist",
             "cwd": "${workspaceRoot}",
-            "preLaunchTask": "learn_opengl"
+            "preLaunchTask": "learn_opengl_fragmentlist"
         }
     ]
 }

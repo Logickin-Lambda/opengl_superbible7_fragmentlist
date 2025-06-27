@@ -1,7 +1,7 @@
 {
     "version": "1.0.0",
     "tasks": [{
-        "label": "learn_opengl",
+        "label": "learn_opengl_fragmentlist",
         "type": "shell",
         "command": "zig build" 
     }]

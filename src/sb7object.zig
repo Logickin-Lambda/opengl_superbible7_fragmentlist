@@ -284,12 +284,20 @@ pub fn ModelObject() type {
             for (0..header_ptr.*.num_chunks) |_| {
                 // More Gaslighting to the file_data to different form of header and chunks.
                 const chunk: *ChunkHeader = @ptrCast(@alignCast(file_data_ptr));
-                file_data_ptr += chunk.size;
 
                 // Seems it is possible to solve it using union, but let's follow the original C++ way
                 switch (@as(ChunkType, @enumFromInt(chunk.chunk_type))) {
                     ChunkType.VERTEX_ATTRIBS => {
                         vertex_attrib_chunk = @ptrCast(@alignCast(chunk));
+                        // Since the chunk only cast the header, but not the data,
+                        // we need to explicitly cast the inner data as shown,
+                        // and finding the start of that Many Item Pointer by adding an offset
+                        // of the size of ChunkHeader and gl.uint which is the attrib_count
+                        // I can't think of a better way of doing this yet, but this nonetheless
+                        // works for now because the attrib_data now has the correct type of pointer
+                        // pointing to the correct location.
+                        const inner_chunk = file_data_ptr + @sizeOf(ChunkHeader) + @sizeOf(gl.uint);
+                        vertex_attrib_chunk.?.attrib_data = @as([*]VertexAttribDecl, @ptrCast(@alignCast(inner_chunk)));
                     },
                     ChunkType.VERTEX_DATA => {
                         vertex_data_chunk = @ptrCast(@alignCast(chunk));
@@ -298,6 +306,9 @@ pub fn ModelObject() type {
                         index_data_chunk = @ptrCast(@alignCast(chunk));
                     },
                     ChunkType.SUB_OBJECT_LIST => {
+                        // This will also cause the same seg fault issue as the vertex_attrib_chunk,
+                        // unless I have a better solution and the future example needs it, I am not
+                        // going to touch this part. TODO: update this cast if better solution is found
                         sub_object_chunk = @ptrCast(@alignCast(chunk));
                     },
                     ChunkType.DATA => {
@@ -305,6 +316,7 @@ pub fn ModelObject() type {
                     },
                     else => {},
                 }
+                file_data_ptr += chunk.size;
             }
 
             // Finally, with all those data, we can finally work on something familiar,
