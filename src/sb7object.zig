@@ -303,6 +303,55 @@ pub fn ModelObject() type {
 
             // Finally, with all those data, we can finally work on something familiar,
             // to declare a new array and buffer for our incoming objects
+            gl.GenVertexArrays(1, (&self.vao)[0..1]);
+            gl.BindVertexArray(self.vao);
+
+            if (data_chunk) |parsed_data| {
+                gl.GenBuffers(1, (&self.data_buffer)[0..1]);
+                gl.BindBuffer(gl.ARRAY_BUFFER, self.data_buffer);
+                gl.BufferData(
+                    gl.ARRAY_BUFFER,
+                    parsed_data.data_length,
+                    @as([*]u8, @ptrCast(@alignCast(parsed_data))) + parsed_data.data_offset,
+                    gl.STATIC_DRAW,
+                );
+            } else {
+                var data_size: gl.uint = 0;
+                var size_used: gl.uint = 0;
+
+                if (vertex_data_chunk) |parsed_data| {
+                    data_size += parsed_data.data_size;
+                }
+
+                if (index_data_chunk) |parsed_data| {
+                    const index_size: gl.uint = if (parsed_data.index_type == gl.UNSIGNED_SHORT) @sizeOf(gl.ushort) else @sizeOf(gl.ubyte);
+                    data_size += parsed_data.index_count * index_size;
+                }
+
+                gl.GenBuffers(1, (&self.data_buffer)[0..1]);
+                gl.BindBuffer(gl.ARRAY_BUFFER, self.data_buffer);
+                gl.BufferData(gl.ARRAY_BUFFER, data_size, null, gl.STATIC_DRAW);
+
+                if (vertex_data_chunk) |parsed_data| {
+                    gl.BufferSubData(
+                        gl.ARRAY_BUFFER,
+                        0,
+                        parsed_data.data_size,
+                        file_data_ptr + parsed_data.data_offset,
+                    );
+                    size_used += parsed_data.data_offset;
+                }
+
+                if (index_data_chunk) |parsed_data| {
+                    const index_size: gl.uint = if (parsed_data.index_type == gl.UNSIGNED_SHORT) @sizeOf(gl.ushort) else @sizeOf(gl.ubyte);
+                    gl.BufferSubData(
+                        gl.ARRAY_BUFFER,
+                        0,
+                        parsed_data.index_count * index_size,
+                        file_data_ptr + parsed_data.index_data_offset,
+                    );
+                }
+            }
 
             return 0;
         }
