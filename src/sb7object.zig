@@ -276,6 +276,8 @@ pub fn ModelObject() type {
             // tell the type of chunk, and this is where the Clamped four characters uint shines
             // because we can turn that into an integer based pattern matching as shown:
             var vertex_attrib_chunk: ?*VertexAttribChunk = null;
+            var vertex_attrib_inner_chunk: ?[*]VertexAttribDecl = null;
+
             var vertex_data_chunk: ?*ChunkVertexData = null;
             var index_data_chunk: ?*ChunkIndexData = null;
             var sub_object_chunk: ?*ChunkSubObjectList = null;
@@ -297,7 +299,7 @@ pub fn ModelObject() type {
                         // works for now because the attrib_data now has the correct type of pointer
                         // pointing to the correct location.
                         const inner_chunk = file_data_ptr + @sizeOf(ChunkHeader) + @sizeOf(gl.uint);
-                        vertex_attrib_chunk.?.attrib_data = @as([*]VertexAttribDecl, @ptrCast(@alignCast(inner_chunk)));
+                        vertex_attrib_inner_chunk = @as([*]VertexAttribDecl, @ptrCast(@alignCast(inner_chunk)));
                     },
                     ChunkType.VERTEX_DATA => {
                         vertex_data_chunk = @ptrCast(@alignCast(chunk));
@@ -371,12 +373,9 @@ pub fn ModelObject() type {
                 }
             }
 
-            // Seems like the original program has stated that the vertex_attrib_chunk is not optional
-            // because there is no null check in this part, but to prevent the program crashes with
-            // a null pointer, I will perform a null check before processing the loop.
             if (vertex_attrib_chunk) |vertex_attrib| {
                 for (0..vertex_attrib.attrib_count) |i| {
-                    const attrib_decl = vertex_attrib.attrib_data[i];
+                    const attrib_decl = vertex_attrib_inner_chunk.?[i];
                     const flag_normalized: gl.boolean = if (attrib_decl.flags & VERTEX_ATTRIB_FLAG_NORMALIZED != 0) gl.TRUE else gl.FALSE;
                     gl.VertexAttribPointer(
                         @intCast(i),
