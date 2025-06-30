@@ -157,8 +157,8 @@ pub fn ModelObject() type {
 
         pub fn deinit(_: Self) void {}
 
-        pub fn render(_: Self, instance_count_in: ?gl.uint, base_instance_in: ?gl.uint) void {
-            renderSubObject(0, instance_count_in, base_instance_in);
+        pub fn render(self: Self, instance_count_in: ?gl.uint, base_instance_in: ?gl.uint) void {
+            self.renderSubObject(0, instance_count_in, base_instance_in);
         }
 
         pub fn renderSubObject(self: Self, object_index: gl.uint, instance_count_in: ?gl.uint, base_instance_in: ?gl.uint) void {
@@ -170,18 +170,18 @@ pub fn ModelObject() type {
             if (self.index_type != gl.NONE) {
                 gl.DrawElementsInstancedBaseInstance(
                     gl.TRIANGLES,
-                    self.sub_object[object_index].count,
+                    @intCast(self.sub_object[object_index].count),
                     self.index_type,
                     @ptrCast(&self.sub_object[object_index].first),
-                    instance_count,
+                    @intCast(instance_count),
                     base_instance,
                 );
             } else {
                 gl.DrawArraysInstancedBaseInstance(
                     gl.TRIANGLES,
-                    self.sub_object[object_index].first,
-                    self.sub_object[object_index].count,
-                    instance_count,
+                    @intCast(self.sub_object[object_index].first),
+                    @intCast(self.sub_object[object_index].count),
+                    @intCast(instance_count),
                     base_instance,
                 );
             }
