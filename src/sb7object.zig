@@ -290,8 +290,9 @@ pub fn ModelObject() type {
                 // Seems it is possible to solve it using union, but let's follow the original C++ way
                 switch (@as(ChunkType, @enumFromInt(chunk.chunk_type))) {
                     ChunkType.VERTEX_ATTRIBS => {
+                        std.log.info("VERTEX_ATTRIBS", .{});
                         vertex_attrib_chunk = @ptrCast(@alignCast(chunk));
-                        // Since the chunk only cast the header, but not the data,
+                        // Since the chunk only cast the header, but not the inner data,
                         // we need to explicitly cast the inner data as shown,
                         // and finding the start of that Many Item Pointer by adding an offset
                         // of the size of ChunkHeader and gl.uint which is the attrib_count
@@ -302,18 +303,22 @@ pub fn ModelObject() type {
                         vertex_attrib_inner_chunk = @as([*]VertexAttribDecl, @ptrCast(@alignCast(inner_chunk)));
                     },
                     ChunkType.VERTEX_DATA => {
+                        std.log.info("VERTEX_DATA", .{});
                         vertex_data_chunk = @ptrCast(@alignCast(chunk));
                     },
                     ChunkType.INDEX_DATA => {
+                        std.log.info("INDEX_DATA", .{});
                         index_data_chunk = @ptrCast(@alignCast(chunk));
                     },
                     ChunkType.SUB_OBJECT_LIST => {
                         // This will also cause the same seg fault issue as the vertex_attrib_chunk,
                         // unless I have a better solution and the future example needs it, I am not
                         // going to touch this part. TODO: update this cast if better solution is found
+                        std.log.info("SUB_OBJECT_LIST", .{});
                         sub_object_chunk = @ptrCast(@alignCast(chunk));
                     },
                     ChunkType.DATA => {
+                        std.log.info("DATA", .{});
                         data_chunk = @ptrCast(@alignCast(chunk));
                     },
                     else => {},
